@@ -7,8 +7,8 @@ from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Enable logging
-logging.basicConfig(format='%(asime)s - %(name)s - %(levelname)s - %(message)s',
+# Enable logging - FIXED the typo!
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,8 @@ def correct_english(text):
         " cant ": " can't ",
         " isnt ": " isn't ",
         " wasnt ": " wasn't ",
+        " u ": " you ",
+        " ur ": " your ",
     }
     
     for wrong, right in fixes.items():
@@ -100,11 +102,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if any(word in msg_lower for word in ['hi', 'hello', 'hey']):
             response = f"Hey {user_name}! How are you?"
         elif 'how are you' in msg_lower:
-            response = "I'm doing great! Thanks for asking!"
+            response = "I'm doing great! Thanks for asking! How about you?"
         elif 'thank' in msg_lower:
             response = "You're welcome! 😊"
         elif 'bye' in msg_lower:
-            response = "Goodbye! Talk to you soon!"
+            response = "Goodbye! Talk to you soon! 👋"
         else:
             response = f"Interesting! Tell me more, {user_name}."
         
@@ -124,7 +126,7 @@ def run_bot():
     """Run the Telegram bot"""
     print("🚀 Starting Telegram bot...")
     
-    # Create application
+    # Create application - this is the CORRECT way for v20+
     application = Application.builder().token(TOKEN).build()
     
     # Add handlers
@@ -134,15 +136,26 @@ def run_bot():
     
     # Start bot
     print("✅ Bot is polling for messages...")
-    application.run_polling()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     print("🎯 Starting English Tutor Bot...")
+    print("=" * 40)
     
     # Start web server in a separate thread
     web_thread = threading.Thread(target=run_web_server)
     web_thread.daemon = True
     web_thread.start()
+    print("✅ Web server thread started")
     
     # Run bot in main thread
-    run_bot()
+    try:
+        run_bot()
+    except Exception as e:
+        print(f"❌ Bot error: {e}")
+        # Keep trying to restart
+        while True:
+            print("🔄 Restarting bot in 5 seconds...")
+            import time
+            time.sleep(5)
+            run_bot()
