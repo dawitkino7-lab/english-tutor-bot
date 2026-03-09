@@ -7,6 +7,8 @@ from datetime import datetime
 from collections import defaultdict
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from flask import Flask
+import threading
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -21,8 +23,21 @@ if not TOKEN:
 
 print(f"✅ Token found: {TOKEN[:10]}...")
 
-# Store conversation history
-conversations = defaultdict(list)
+# Create a simple Flask app to keep Railway happy
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
+def run_flask():
+    """Run Flask server in a separate thread"""
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
 
 def correct_english(text):
     """Simple rule-based correction"""
@@ -67,7 +82,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle all messages"""
     user_message = update.message.text
     user_name = update.effective_user.first_name
-    user_id = update.effective_user.id
     
     logger.info(f"Message from {user_name}: {user_message}")
     
@@ -110,8 +124,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Just send me messages! I'll correct your English."
     )
 
-def main():
-    """Start the bot"""
+def run_bot():
+    """Run the Telegram bot"""
     print("🚀 Starting bot...")
     
     # Create Application
@@ -123,8 +137,21 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Run the bot
-    print("✅ Bot is running! Press Ctrl+C to stop.")
+    print("✅ Bot is running!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+def main():
+    """Main function"""
+    print("🎯 Starting English Tutor Bot...")
+    
+    # Start Flask in a thread
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    print("🌐 Web server started")
+    
+    # Run bot in main thread
+    run_bot()
 
 if __name__ == '__main__':
     main()
