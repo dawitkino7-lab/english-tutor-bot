@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Enable logging
-logging.basicConfig(format='%(asime)s - %(name)s - %(levelname)s - %(message)s',
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def main():
     """Start the bot"""
     print("🚀 Starting bot...")
     
-    # Create Application (NOT Updater)
+    # Create Application
     application = Application.builder().token(TOKEN).build()
     
     # Add handlers
@@ -122,7 +122,7 @@ def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Run the bot (this is the CORRECT way for v20+)
+    # Run the bot
     print("✅ Bot is running! Press Ctrl+C to stop.")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
