@@ -2,16 +2,13 @@ import os
 import sys
 import logging
 import asyncio
-import random
-from datetime import datetime
-from collections import defaultdict
+import threading
+from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from flask import Flask
-import threading
 
 # Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+logging.basicConfig(format='%(asime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -23,20 +20,21 @@ if not TOKEN:
 
 print(f"✅ Token found: {TOKEN[:10]}...")
 
-# Create a simple Flask app to keep Railway happy
+# Create Flask app for web server
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot is running!"
+    return "English Tutor Bot is running!"
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-def run_flask():
-    """Run Flask server in a separate thread"""
+def run_web_server():
+    """Run Flask web server"""
     port = int(os.environ.get('PORT', 5000))
+    print(f"🌐 Web server starting on port {port}")
     app.run(host='0.0.0.0', port=port)
 
 def correct_english(text):
@@ -61,8 +59,6 @@ def correct_english(text):
         " cant ": " can't ",
         " isnt ": " isn't ",
         " wasnt ": " wasn't ",
-        " u ": " you ",
-        " ur ": " your ",
     }
     
     for wrong, right in fixes.items():
@@ -85,11 +81,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"Message from {user_name}: {user_message}")
     
-    # Show typing indicator
-    await update.message.chat.send_action(action="typing")
-    await asyncio.sleep(0.5)
-    
     try:
+        # Show typing indicator
+        await update.message.chat.send_action(action="typing")
+        await asyncio.sleep(0.5)
+        
         # Correct the message
         corrected = correct_english(user_message)
         
@@ -98,10 +94,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ {corrected}")
             await asyncio.sleep(0.5)
         
-        # Simple response
+        # Generate response
         msg_lower = user_message.lower()
         
-        if any(greet in msg_lower for greet in ['hi', 'hello', 'hey']):
+        if any(word in msg_lower for word in ['hi', 'hello', 'hey']):
             response = f"Hey {user_name}! How are you?"
         elif 'how are you' in msg_lower:
             response = "I'm doing great! Thanks for asking!"
@@ -126,9 +122,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def run_bot():
     """Run the Telegram bot"""
-    print("🚀 Starting bot...")
+    print("🚀 Starting Telegram bot...")
     
-    # Create Application
+    # Create application
     application = Application.builder().token(TOKEN).build()
     
     # Add handlers
@@ -136,22 +132,17 @@ def run_bot():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Run the bot
-    print("✅ Bot is running!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Start bot
+    print("✅ Bot is polling for messages...")
+    application.run_polling()
 
-def main():
-    """Main function"""
+if __name__ == '__main__':
     print("🎯 Starting English Tutor Bot...")
     
-    # Start Flask in a thread
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    print("🌐 Web server started")
+    # Start web server in a separate thread
+    web_thread = threading.Thread(target=run_web_server)
+    web_thread.daemon = True
+    web_thread.start()
     
     # Run bot in main thread
     run_bot()
-
-if __name__ == '__main__':
-    main()
