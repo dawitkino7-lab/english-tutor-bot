@@ -1,7 +1,10 @@
 services:
   - type: web
     name: english-tutor-bot
-    env: python
+    runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
-    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
