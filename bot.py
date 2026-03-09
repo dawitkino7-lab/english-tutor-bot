@@ -1,16 +1,11 @@
 import os
 import sys
-import logging
-import asyncio
+import time
+import json
+import requests
 import threading
 from flask import Flask
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-
-# Enable logging - FIXED the typo!
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+from datetime import datetime
 
 # Get token from environment variable
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -20,7 +15,7 @@ if not TOKEN:
 
 print(f"✅ Token found: {TOKEN[:10]}...")
 
-# Create Flask app for web server
+# Flask app for web server
 app = Flask(__name__)
 
 @app.route('/')
@@ -61,6 +56,7 @@ def correct_english(text):
         " wasnt ": " wasn't ",
         " u ": " you ",
         " ur ": " your ",
+        " urs ": " yours ",
     }
     
     for wrong, right in fixes.items():
@@ -68,94 +64,106 @@ def correct_english(text):
     
     return corrected
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start command handler"""
-    user = update.effective_user
-    await update.message.reply_text(
-        f"👋 Hi {user.first_name}! I'm your English tutor bot!\n\n"
-        "Send me any message and I'll help with your English."
-    )
+def get_response(user_message, user_name):
+    """Generate response based on message"""
+    msg_lower = user_message.lower()
+    
+    if any(word in msg_lower for word in ['hi', 'hello', 'hey']):
+        return f"Hey {user_name}! How are you?"
+    elif 'how are you' in msg_lower:
+        return "I'm doing great! Thanks for asking! How about you?"
+    elif 'thank' in msg_lower:
+        return "You're welcome! 😊"
+    elif 'bye' in msg_lower:
+        return "Goodbye! Talk to you soon! 👋"
+    elif 'weather' in msg_lower:
+        return "I hope the weather is nice where you are! ☀️"
+    elif 'name' in msg_lower:
+        return f"My name is John, and I'm your English tutor! What's your name?"
+    else:
+        return f"Interesting! Tell me more, {user_name}."
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle all messages"""
-    user_message = update.message.text
-    user_name = update.effective_user.first_name
-    
-    logger.info(f"Message from {user_name}: {user_message}")
-    
+def send_message(chat_id, text):
+    """Send message to Telegram"""
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    data = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML"
+    }
     try:
-        # Show typing indicator
-        await update.message.chat.send_action(action="typing")
-        await asyncio.sleep(0.5)
-        
-        # Correct the message
-        corrected = correct_english(user_message)
-        
-        # Send correction if needed
-        if corrected != user_message:
-            await update.message.reply_text(f"✅ {corrected}")
-            await asyncio.sleep(0.5)
-        
-        # Generate response
-        msg_lower = user_message.lower()
-        
-        if any(word in msg_lower for word in ['hi', 'hello', 'hey']):
-            response = f"Hey {user_name}! How are you?"
-        elif 'how are you' in msg_lower:
-            response = "I'm doing great! Thanks for asking! How about you?"
-        elif 'thank' in msg_lower:
-            response = "You're welcome! 😊"
-        elif 'bye' in msg_lower:
-            response = "Goodbye! Talk to you soon! 👋"
-        else:
-            response = f"Interesting! Tell me more, {user_name}."
-        
-        await update.message.reply_text(response)
-        
+        requests.post(url, json=data)
     except Exception as e:
-        logger.error(f"Error: {e}")
-        await update.message.reply_text("I'm here! Tell me more.")
+        print(f"Error sending message: {e}")
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Help command"""
-    await update.message.reply_text(
-        "Just send me messages! I'll correct your English."
-    )
+def process_updates():
+    """Main bot loop"""
+    last_update_id = 0
+    
+    print("🚀 Bot started! Waiting for messages...")
+    
+    while True:
+        try:
+            # Get updates from Telegram
+            url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
+            params = {
+                "offset": last_update_id + 1,
+                "timeout": 30
+            }
+            
+            response = requests.get(url, params=params, timeout=35)
+            data = response.json()
+            
+            if data["ok"] and data["result"]:
+                for update in data["result"]:
+                    last_update_id = update["update_id"]
+                    
+                    # Check if it's a message
+                    if "message" in update:
+                        message = update["message"]
+                        chat_id = message["chat"]["id"]
+                        text = message.get("text", "")
+                        user_name = message["from"].get("first_name", "Friend")
+                        
+                        print(f"📨 Message from {user_name}: {text}")
+                        
+                        # Handle commands
+                        if text == "/start":
+                            welcome = f"👋 Hi {user_name}! I'm your English tutor bot!\n\nSend me any message and I'll help with your English."
+                            send_message(chat_id, welcome)
+                        
+                        elif text == "/help":
+                            help_text = "Just send me messages! I'll correct your English."
+                            send_message(chat_id, help_text)
+                        
+                        elif text:
+                            # Regular message - correct and respond
+                            corrected = correct_english(text)
+                            
+                            if corrected != text:
+                                send_message(chat_id, f"✅ {corrected}")
+                                time.sleep(0.5)
+                            
+                            response = get_response(text, user_name)
+                            send_message(chat_id, response)
+        
+        except requests.exceptions.ReadTimeout:
+            # This is normal - just continue
+            pass
+        
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            time.sleep(5)
 
-def run_bot():
-    """Run the Telegram bot"""
-    print("🚀 Starting Telegram bot...")
-    
-    # Create application - this is the CORRECT way for v20+
-    application = Application.builder().token(TOKEN).build()
-    
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # Start bot
-    print("✅ Bot is polling for messages...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("🎯 Starting English Tutor Bot...")
     print("=" * 40)
     
-    # Start web server in a separate thread
+    # Start web server in thread
     web_thread = threading.Thread(target=run_web_server)
     web_thread.daemon = True
     web_thread.start()
-    print("✅ Web server thread started")
+    print("✅ Web server started")
     
     # Run bot in main thread
-    try:
-        run_bot()
-    except Exception as e:
-        print(f"❌ Bot error: {e}")
-        # Keep trying to restart
-        while True:
-            print("🔄 Restarting bot in 5 seconds...")
-            import time
-            time.sleep(5)
-            run_bot()
+    process_updates()
