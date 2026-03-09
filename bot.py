@@ -5,6 +5,7 @@ import json
 import requests
 import threading
 import random
+import re
 from flask import Flask
 from datetime import datetime
 
@@ -33,91 +34,173 @@ def run_web_server():
     print(f"🌐 Web server starting on port {port}")
     app.run(host='0.0.0.0', port=port)
 
-def correct_english(text):
-    """Advanced correction with more rules"""
+def correct_punctuation_and_capitalization(text):
+    """SPECIFICALLY fix punctuation and capitalization"""
     if not text:
         return text
     
-    original = text
+    # Trim whitespace
+    text = text.strip()
     
-    # Capitalize first letter
-    corrected = text[0].upper() + text[1:] if len(text) > 1 else text.upper()
+    # Fix CAPITALIZATION: First letter of sentence
+    if text and text[0].islower():
+        text = text[0].upper() + text[1:]
     
-    # Add period if missing and not a question/exclamation
-    if corrected and corrected[-1] not in ['.', '!', '?']:
-        corrected += '.'
+    # Fix I pronoun (standalone)
+    text = re.sub(r'\bi\b', 'I', text)
     
-    # Common fixes dictionary
+    # Fix punctuation: Add period if missing at the end
+    if text and text[-1] not in ['.', '!', '?']:
+        text += '.'
+    
+    # Fix multiple spaces
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Fix space before punctuation
+    text = re.sub(r'\s+([.,!?;:])', r'\1', text)
+    
+    # Fix space after punctuation
+    text = re.sub(r'([.,!?;:])([^\s])', r'\1 \2', text)
+    
+    return text
+
+def correct_grammar_and_spelling(text):
+    """Fix common grammar and spelling mistakes"""
+    
+    # Dictionary of fixes
     fixes = {
-        # Pronouns
-        " i ": " I ",
-        " i'm ": " I'm ",
-        " im ": " I'm ",
-        "Im ": "I'm ",
-        " im ": " I'm ",
-        " ive ": " I've ",
-        " id ": " I'd ",
-        " ill ": " I'll ",
-        
         # Contractions
-        " dont ": " don't ",
-        " dont't ": " don't ",
-        " doesnt ": " doesn't ",
-        " didnt ": " didn't ",
-        " cant ": " can't ",
-        " cant't ": " can't ",
-        " cannot ": " can't ",
-        " wont ": " won't ",
-        " wont't ": " won't ",
-        " wouldnt ": " wouldn't ",
-        " couldnt ": " couldn't ",
-        " shouldnt ": " shouldn't ",
-        " isnt ": " isn't ",
-        " arent ": " aren't ",
-        " wasnt ": " wasn't ",
-        " werent ": " weren't ",
-        " hasnt ": " hasn't ",
-        " havnt ": " haven't ",
-        " hadnt ": " hadn't ",
+        r'\bdont\b': "don't",
+        r'\bdoesnt\b': "doesn't",
+        r'\bdidnt\b': "didn't",
+        r'\bcant\b': "can't",
+        r'\bcannot\b': "can't",
+        r'\bwont\b': "won't",
+        r'\bwouldnt\b': "wouldn't",
+        r'\bcouldnt\b': "couldn't",
+        r'\bshouldnt\b': "shouldn't",
+        r'\bisnt\b': "isn't",
+        r'\barent\b': "aren't",
+        r'\bwasnt\b': "wasn't",
+        r'\bwerent\b': "weren't",
+        r'\bhasnt\b': "hasn't",
+        r'\bhavent\b': "haven't",
+        r'\bhadnt\b': "hadn't",
         
-        # Informal
-        " u ": " you ",
-        " ur ": " your ",
-        " urs ": " yours ",
-        " ya ": " you ",
-        " wanna ": " want to ",
-        " gonna ": " going to ",
-        " gotta ": " got to ",
-        " kinda ": " kind of ",
-        " sorta ": " sort of ",
-        " outta ": " out of ",
+        # Informal to formal
+        r'\bwanna\b': "want to",
+        r'\bgonna\b': "going to",
+        r'\bgotta\b': "got to",
+        r'\bkinda\b': "kind of",
+        r'\bsorta\b': "sort of",
         
         # Common misspellings
-        " recieve ": " receive ",
-        " acheive ": " achieve ",
-        " beleive ": " believe ",
-        " seperate ": " separate ",
-        " definately ": " definitely ",
-        " accomodate ": " accommodate ",
-        " ocurred ": " occurred ",
-        " occured ": " occurred ",
-        " thier ": " their ",
-        " there's ": " theirs ",
+        r'\brecieve\b': "receive",
+        r'\bacheive\b': "achieve",
+        r'\bbeleive\b': "believe",
+        r'\bseperate\b': "separate",
+        r'\bdefinately\b': "definitely",
+        r'\baccomodate\b': "accommodate",
+        r'\boccurred\b': "occurred",
+        r'\boccured\b': "occurred",
+        r'\bthier\b': "their",
+        r'\btheres\b': "there's",
+        r'\byour\b welcome\b': "you're welcome",
     }
     
-    for wrong, right in fixes.items():
-        corrected = corrected.replace(wrong, right)
+    for pattern, replacement in fixes.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
-    return corrected
+    return text
+
+def correct_english(text):
+    """Full correction pipeline"""
+    if not text:
+        return text
+    
+    # Step 1: Fix punctuation and capitalization
+    text = correct_punctuation_and_capitalization(text)
+    
+    # Step 2: Fix grammar and spelling
+    text = correct_grammar_and_spelling(text)
+    
+    return text
+
+def answer_question(user_message, user_name):
+    """Actually answer questions instead of deflecting"""
+    
+    msg_lower = user_message.lower()
+    
+    # Question about bot's name
+    if 'your name' in msg_lower or 'who are you' in msg_lower:
+        return f"My name is John! I'm your personal English tutor bot. I'm here to help you practice and improve your English skills. What's your name?"
+    
+    # Question about what bot can do
+    if 'what can you do' in msg_lower or 'your purpose' in msg_lower:
+        return "I can help you improve your English! I'll correct your spelling, grammar, and punctuation. We can chat about anything - your day, hobbies, interests, or specific topics you want to practice. Just talk to me naturally!"
+    
+    # Question about age
+    if 'how old' in msg_lower and ('you' in msg_lower or 'bot' in msg_lower):
+        return "I'm a bot, so I don't have an age! But I was created recently to help people like you learn English. 😊"
+    
+    # Question about location
+    if 'where are you from' in msg_lower or 'where do you live' in msg_lower:
+        return "I live in the cloud! ☁️ I'm an AI bot, so I don't have a physical location. But I'm always here whenever you need me!"
+    
+    # Question about time
+    if 'what time' in msg_lower or 'what is the time' in msg_lower:
+        current_time = datetime.now().strftime("%I:%M %p")
+        return f"I don't have a watch, but I know it's {current_time} where my server is! What time is it where you are?"
+    
+    # Question about weather
+    if 'weather' in msg_lower and '?' in user_message:
+        return "I wish I could check the weather for you, but I don't have internet access for that. Tell me about the weather where you are! Is it sunny, rainy, or something else?"
+    
+    # Question about helping with English
+    if 'help me' in msg_lower and ('english' in msg_lower or 'learn' in msg_lower):
+        return "Of course! I'd love to help you with English. The best way to practice is just to chat with me naturally. I'll correct your mistakes as we talk. What would you like to discuss today?"
+    
+    # Question about favorites
+    if 'favorite' in msg_lower and '?' in user_message:
+        if 'color' in msg_lower:
+            return "My favorite color is blue! 💙 It's calm and peaceful. What's your favorite color?"
+        elif 'food' in msg_lower:
+            return "I don't eat food, but I hear pizza and chocolate are pretty popular! What's your favorite food?"
+        elif 'movie' in msg_lower:
+            return "I don't watch movies, but I'd love to hear about your favorite movie! What do you like about it?"
+        elif 'music' in msg_lower:
+            return "I don't listen to music, but I know it's wonderful! What kind of music do you enjoy?"
+        else:
+            return f"That's a great question! I don't have favorites since I'm a bot, but I'd love to hear what your favorite is!"
+    
+    # Question about feelings
+    if 'how do you feel' in msg_lower or 'are you happy' in msg_lower:
+        return "I don't have feelings like humans do, but I'm programmed to be friendly and helpful! Talking with you makes my code happy. 😊 How are you feeling today?"
+    
+    # Question about capabilities
+    if 'can you' in msg_lower and '?' in user_message:
+        if 'correct' in msg_lower:
+            return "Yes, I can definitely correct your English! That's my main job. Just keep chatting and I'll fix any mistakes I see."
+        elif 'understand' in msg_lower:
+            return "Yes, I understand English pretty well! I might miss some things occasionally, but I'll do my best to understand you."
+        else:
+            return "I can help you practice English, correct your mistakes, and chat with you about various topics. What specifically would you like me to do?"
+    
+    return None  # Not a question we have an answer for
 
 def get_smart_response(user_message, user_name, conversation_history):
     """Generate intelligent responses based on context"""
     
     msg_lower = user_message.lower()
     
+    # FIRST: Check if it's a question we can answer directly
+    question_answer = answer_question(user_message, user_name)
+    if question_answer:
+        return question_answer
+    
     # Greetings with variety
     greetings = ['hi', 'hello', 'hey', 'greetings', 'whats up', 'sup', 'howdy']
-    if any(word in msg_lower for word in greetings):
+    if any(word in msg_lower for word in greetings) and len(user_message.split()) <= 2:
         responses = [
             f"Hey {user_name}! Great to see you! How's your day going?",
             f"Hello {user_name}! Ready to practice some English?",
@@ -156,26 +239,8 @@ def get_smart_response(user_message, user_name, conversation_history):
         ]
         return random.choice(responses)
     
-    # Questions about the bot
-    if any(word in msg_lower for word in ['your name', 'who are you']):
-        responses = [
-            "I'm John, your personal English tutor bot! I'm here to help you improve your English skills.",
-            "My name is John! Think of me as your friendly English practice partner.",
-            "I'm John, your AI English tutor! I can help you with grammar, spelling, and conversation."
-        ]
-        return random.choice(responses)
-    
-    # Questions about what the bot does
-    if any(word in msg_lower for word in ['what can you do', 'help me', 'what do you do']):
-        responses = [
-            "I can help you with English! I'll correct your spelling, grammar, and punctuation. We can chat about anything to help you practice!",
-            "I'm your English tutor! Send me messages and I'll correct them. We can talk about any topic you like!",
-            "I help you improve your English! Just chat with me naturally, and I'll fix your mistakes and keep the conversation going."
-        ]
-        return random.choice(responses)
-    
-    # Weather talk
-    if 'weather' in msg_lower:
+    # Weather talk (not a question)
+    if 'weather' in msg_lower and '?' not in user_message:
         responses = [
             "Weather is always a great topic! What's it like where you are today?",
             "I hope the weather is nice for you! Do you prefer sunny days or rainy days?",
@@ -210,16 +275,6 @@ def get_smart_response(user_message, user_name, conversation_history):
         ]
         return random.choice(responses)
     
-    # Check if it's a question
-    if '?' in user_message:
-        responses = [
-            f"That's an interesting question! What do you think about it, {user_name}?",
-            "Good question! I'm curious to hear your thoughts first.",
-            "Hmm, let me think about that. What's your opinion?",
-            "That's a thoughtful question. Tell me what you think!"
-        ]
-        return random.choice(responses)
-    
     # Short messages (1-3 words)
     if len(user_message.split()) <= 3:
         responses = [
@@ -235,7 +290,7 @@ def get_smart_response(user_message, user_name, conversation_history):
     default_responses = [
         f"That's really interesting, {user_name}! Tell me more.",
         "I see! What else would you like to share?",
-        "Thanks for sharing that with me! How does that make you feel?",
+        "Thanks for sharing that with me!",
         "I'm following along! Please continue.",
         f"Great! Keep going, {user_name}. I'm learning about you.",
         "That's cool! Is there anything specific you want to practice?",
@@ -301,7 +356,7 @@ def process_updates():
                         chat_id = message["chat"]["id"]
                         text = message.get("text", "")
                         user_name = message["from"].get("first_name", "Friend")
-                        user_id = str(chat_id)  # Use chat_id as user identifier
+                        user_id = str(chat_id)
                         
                         print(f"💬 Message from {user_name}: {text}")
                         
@@ -309,18 +364,18 @@ def process_updates():
                         if user_id not in user_conversations:
                             user_conversations[user_id] = []
                         
-                        # Send typing indicator (makes it feel more human)
+                        # Send typing indicator
                         send_typing_action(chat_id)
                         time.sleep(1)
                         
                         # Handle commands
                         if text == "/start":
-                            welcome = f"👋 Hi {user_name}! I'm your English tutor bot!\n\nI can help you with:\n✅ Spelling\n✅ Grammar\n✅ Punctuation\n✅ Conversation practice\n\nJust chat with me like a friend and I'll help you improve your English! What would you like to talk about today?"
+                            welcome = f"👋 Hi {user_name}! I'm your English tutor bot!\n\nI can help you with:\n✅ Spelling\n✅ Grammar\n✅ Punctuation\n✅ Capitalization\n✅ Conversation practice\n\nJust chat with me like a friend and I'll help you improve your English! What would you like to talk about today?"
                             send_message(chat_id, welcome)
                             print("✅ Sent welcome message")
                         
                         elif text == "/help":
-                            help_text = "📚 <b>How to use me:</b>\n\n• Just chat with me normally\n• I'll correct your mistakes\n• We can talk about ANY topic\n• The more you chat, the more you learn!\n\nTry telling me about your day, your hobbies, or ask me questions!"
+                            help_text = "📚 <b>How to use me:</b>\n\n• Just chat with me normally\n• I'll correct your punctuation and capitalization\n• I'll fix spelling and grammar mistakes\n• I'll answer your questions directly\n• We can talk about ANY topic\n\nThe more you chat, the more you learn!"
                             send_message(chat_id, help_text)
                             print("✅ Sent help message")
                         
@@ -328,11 +383,11 @@ def process_updates():
                             # Add to conversation history
                             user_conversations[user_id].append({"role": "user", "text": text})
                             
-                            # Keep history manageable (last 5 messages)
+                            # Keep history manageable
                             if len(user_conversations[user_id]) > 5:
                                 user_conversations[user_id] = user_conversations[user_id][-5:]
                             
-                            # Correct the message
+                            # CORRECT the message (punctuation, capitalization, grammar)
                             corrected = correct_english(text)
                             
                             # Send correction if needed
@@ -351,7 +406,7 @@ def process_updates():
                             # Add bot response to history
                             user_conversations[user_id].append({"role": "bot", "text": response})
             
-            time.sleep(1)  # Small delay between checks
+            time.sleep(1)
             
         except requests.exceptions.ReadTimeout:
             continue
